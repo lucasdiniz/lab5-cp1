@@ -1,0 +1,76 @@
+---
+title: "lab5-cp1"
+author: "Lucas Diniz"
+date: "22/08/2017"
+output: html_notebook
+---
+
+#Como conquistar o crush (tutorial)
+Todo mundo em algum momento provavelmente já se questionou : Será que eu tenho chance com fulano/fulana? O que eu tenho que fazer pra conquistar essa pessoa? O que será que faz com que ela/ele goste de outra pessoa?
+
+Você provavelmente pensou na resposta óbvia, <b>beleza</b>. Mas... será que é só isso mesmo? <b>NÃO!</b> Existem outros fatores envolvidos e beleza não é a resposta mágica para um vida amorosa de sucesso. Iremos aqui analisar dados sobre vários encontros no modelo _speed-dating_ (pode ir no google rs) entre pessoas desconhecidas. Ao final desses encontros todas as pessoas envolvidas preencheram um formulário detalhando o que acharam da outra pessoa com quem se encontraram. Nós vamos utilizar esses dados para verificar quais são as características cruciais para que uma pessoa goste de outra.
+
+Vamos direto ao ponto, os dados que vamos analisar de cada encontro consistem basicamente em:<br>
+<b>like</b>: O quanto a pessoa 1 gostou da pessoa 2. <br>
+<b>attr</b>: O quanto a pessoa 1 achou a pessoa 2 atraente. <br>
+<b>fun</b>: Quão divertida(o) a pessoa 1 achou a pessoa 2. <br>
+<b>intel</b>: Quão inteligente a pessoa 1 achou a pessoa 2. <br>
+<b>shar</b>: O quanto a pessoa 1 achou que compartilha interesses com a pessoa 2. <br>
+
+```{r setup, include=FALSE} 
+  knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+  library(tidyverse)
+  library(GGally)
+  library(broom)
+  library(ggfortify)
+
+```
+
+Observemos primeiro a relação entre as variáveis citadas do ponto de vista dos homens, dando foco principalmente nas relações da variável _like_ com as outras variáveis:
+
+```{r, message=FALSE, warning=FALSE}
+  dados = read_csv('dados.csv') %>% filter(complete.cases(.))
+  dados_mulheres = dados %>% filter(gender == 0)
+  dados_homens = dados %>% filter(gender == 1)
+
+  dados_homens %>% 
+    select(like, attr, fun, intel, shar) %>%
+    ggpairs(size = .5, 
+            lower = list(continuous = wrap("points", alpha = 0.3)))
+```
+
+Podemos notar que para os homens que fizeram o experimento, na hora de decidir se gosta de alguém ou não o bom-humor é o fator <b>MAIS</b> importante. Contudo beleza, e compartilhamento de interesses ainda aparecem quesitos importantes. Aparantemente inteligência não parece ser um fator importante para os homens :p (Não me surpreendi com esse resultado hahaha).
+
+```{r}
+  dados_mulheres %>% 
+    select(like, attr, fun, intel, shar) %>%
+    ggpairs(size = .5, 
+            lower = list(continuous = wrap("points", size = .5, alpha = 0.3)))
+```
+
+Já para as mulheres obtivemos um resultado parecido, contudo, o fator beleza é o mais importante. Seguido de perto por bom-humor e compartilhamento de interesses. As mulheres parecem também se importar mais com o quesito inteligência, porém não tanto quanto eu esperava rs.
+
+```{r}
+mulheres.model = lm(attr ~ like, data = dados_mulheres)
+tidy(mulheres.model)
+mulheresAugmented = dados_mulheres %>% 
+  add_predictions(mulheres.model) %>% 
+  add_residuals(mulheres.model)
+
+# Modelo x dados
+mulheresAugmented %>% 
+  ggplot(aes(x = attr)) + 
+  geom_line(aes(y = pred), size = 2, colour = "blue") + 
+  geom_point(aes(y = like))
+
+# Resíduos x dados
+mulheresAugmented %>% 
+  ggplot(aes(x = attr)) + 
+  geom_point(aes(y = resid), size = 2) +
+  geom_ref_line(h = 0, colour = "grey80")
+
+tidy(mulheres.model, conf.int = TRUE)
+glance(mulheres.model, conf.int = TRUE)
+
+```
+
