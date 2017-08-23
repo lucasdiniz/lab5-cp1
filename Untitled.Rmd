@@ -23,6 +23,9 @@ Vamos direto ao ponto, os dados que vamos analisar de cada encontro consistem ba
   library(GGally)
   library(broom)
   library(ggfortify)
+  library(ggplot2)
+library(pscl)
+  library(modelr)
 
 ```
 
@@ -39,7 +42,7 @@ Observemos primeiro a relação entre as variáveis citadas do ponto de vista do
             lower = list(continuous = wrap("points", alpha = 0.3)))
 ```
 
-Podemos notar que para os homens que fizeram o experimento, na hora de decidir se gosta de alguém ou não o bom-humor é o fator <b>MAIS</b> importante. Contudo beleza, e compartilhamento de interesses ainda aparecem quesitos importantes. Aparantemente inteligência não parece ser um fator importante para os homens :p (Não me surpreendi com esse resultado hahaha).
+Podemos notar que para os homens que fizeram o experimento, na hora de decidir se gosta de alguém ou não o bom-humor é o fator <b>MAIS</b> importante. Contudo beleza, e compartilhamento de interesses ainda aparecem como quesitos importantes. Aparantemente inteligência não parece ser um fator importante para os homens :p (Não me surpreendi com esse resultado hahaha).
 
 ```{r}
   dados_mulheres %>% 
@@ -51,7 +54,11 @@ Podemos notar que para os homens que fizeram o experimento, na hora de decidir s
 Já para as mulheres obtivemos um resultado parecido, contudo, o fator beleza é o mais importante. Seguido de perto por bom-humor e compartilhamento de interesses. As mulheres parecem também se importar mais com o quesito inteligência, porém não tanto quanto eu esperava rs.
 
 ```{r}
-mulheres.model = lm(attr ~ like, data = dados_mulheres)
+dados_homens %>% mutate(like = like, attr = attr) %>% ggplot(aes(x = fun)) + geom_point(aes(y = like, size=shar, color = attr))
+
+
+dados_mulheres <- dados_mulheres %>% filter(attr > 0, fun > 0)
+mulheres.model = lm(log(like) ~ log(attr), data = dados_mulheres)
 tidy(mulheres.model)
 mulheresAugmented = dados_mulheres %>% 
   add_predictions(mulheres.model) %>% 
@@ -60,13 +67,13 @@ mulheresAugmented = dados_mulheres %>%
 # Modelo x dados
 mulheresAugmented %>% 
   ggplot(aes(x = attr)) + 
-  geom_line(aes(y = pred), size = 2, colour = "blue") + 
+  geom_line(aes(y = exp(pred)), size = 2, colour = "blue") + 
   geom_point(aes(y = like))
 
 # Resíduos x dados
 mulheresAugmented %>% 
   ggplot(aes(x = attr)) + 
-  geom_point(aes(y = resid), size = 2) +
+  geom_point(aes(y = resid), size = 2, position = "dodge") +
   geom_ref_line(h = 0, colour = "grey80")
 
 tidy(mulheres.model, conf.int = TRUE)
