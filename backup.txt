@@ -1,0 +1,126 @@
+---
+title: "lab5-cp1"
+author: "Lucas Diniz"
+date: "22/08/2017"
+output: html_notebook
+---
+
+#Como conquistar o crush (tutorial)
+Todo mundo em algum momento provavelmente já se questionou : Será que eu tenho chance com fulano/fulana? O que eu tenho que fazer pra conquistar essa pessoa? O que será que faz com que ela/ele goste de outra pessoa?
+
+Você provavelmente pensou na resposta óbvia, <b>beleza</b>. Mas... será que é só isso mesmo? <b>NÃO!</b> Existem outros fatores envolvidos e beleza não é a resposta mágica para um vida amorosa de sucesso. Iremos aqui analisar dados sobre vários encontros no modelo _speed-dating_ (pode ir no google rs) entre pessoas desconhecidas. Ao final desses encontros todas as pessoas envolvidas preencheram um formulário detalhando o que acharam da outra pessoa com quem se encontraram. Nós vamos utilizar esses dados para verificar quais são as características cruciais para que uma pessoa goste de outra.
+
+Vamos direto ao ponto, os dados que vamos analisar de cada encontro consistem basicamente em:<br>
+<b>like</b>: O quanto a pessoa 1 gostou da pessoa 2. <br>
+<b>attr</b>: O quanto a pessoa 1 achou a pessoa 2 atraente. <br>
+<b>fun</b>: Quão divertida(o) a pessoa 1 achou a pessoa 2. <br>
+<b>intel</b>: Quão inteligente a pessoa 1 achou a pessoa 2. <br>
+<b>shar</b>: O quanto a pessoa 1 achou que compartilha interesses com a pessoa 2. <br>
+
+```{r setup, include=FALSE} 
+  knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+suppressWarnings(library(tidyverse))
+  library(tidyverse)
+  library(GGally)
+  library(broom)
+  library(ggfortify)
+  library(ggplot2)
+  library(modelr)
+  library(MASS)
+  library(car)
+  library(plotly)
+
+```
+
+Observemos primeiro a relação entre as variáveis citadas do ponto de vista dos homens, dando foco principalmente nas relações da variável _like_ com as outras variáveis:
+
+```{r, message=FALSE, warning=FALSE}
+  dados = read_csv('dados.csv') %>% filter(complete.cases(.))
+  dados_mulheres = dados %>% filter(gender == 0)
+  dados_homens = dados %>% filter(gender == 1)
+
+  dados_homens %>% 
+    select(like, attr, fun, intel, shar) %>%
+    ggpairs(size = .5, 
+            lower = list(continuous = wrap("points", alpha = 0.3)))
+```
+
+Podemos notar que para os homens que fizeram o experimento, na hora de decidir se gosta de alguém ou não o bom-humor é o fator <b>MAIS</b> importante. Contudo beleza, e compartilhamento de interesses ainda aparecem como quesitos importantes. Aparantemente inteligência não parece ser um fator importante para os homens :p (Não me surpreendi com esse resultado hahaha).
+
+```{r}
+  dados_mulheres %>% 
+    select(like, attr, fun, intel, shar) %>%
+    ggpairs(size = .5, 
+            lower = list(continuous = wrap("points", size = .5, alpha = 0.3)))
+```
+
+Já para as mulheres obtivemos um resultado parecido, contudo, o fator beleza é o mais importante. Seguido de perto por bom-humor e compartilhamento de interesses. As mulheres parecem também se importar mais com o quesito inteligência, porém não tanto quanto eu esperava rs.
+
+```{r}
+
+teste <- dados_homens %>% filter(intel != 2.5)
+
+ggplotly(ggplot(dados_mulheres, aes(x = fun)) + geom_jitter(aes(y = like, size=shar, color = attr)) + facet_grid(. ~intel))
+
+mulheres.model = lm(like ~ attr + fun + shar + intel, data = dados_mulheres)
+summary(mulheres.model)
+
+homens.model = lm(like ~ attr + fun + shar + intel, data = dados_homens %>% filter(intel != 2.5))
+summary(homens.model)
+
+
+outlierTest(mulheres.model)
+qqPlot(homens.model, main="QQ Plot")
+leveragePlots(homens.model)
+
+
+influencePlot(mulheres.model, id.method="identify", main="Influence Plot", sub="Circle size is proportial to Cook's Distance" )
+
+
+para_plotar_modelo = dados_mulheres %>% 
+  data_grid(attr = seq_range(attr, 10), # Crie um vetor de 10 valores no range de TV2
+            fun = seq_range(fun, 4), # Vetor de 4 valores no range de Radio 
+            intel = seq_range(intel, 3),
+            shar = seq_range(shar, 3)) %>% add_predictions(mulheres.model)
+
+ggplotly(ggplot(para_plotar_modelo, aes(x = attr, y = pred)) + 
+  geom_point(aes(colour = fun, size = shar)) + facet_grid(. ~intel))
+
+
+
+M <- model.matrix(mulheres.model)
+det(solve(t(M)%*%M))
+
+n = nrow(M)
+p = ncol(M)
+
+M = M%*%solve(t(M)%*%M)%*%t(M)
+
+anova(mulheres.model)
+
+stepAIC(mulheres.model)
+
+plot(fitted(mulheres.model), resid(mulheres.model), xlab="Valor ajustado", ylab="Residuo")
+
+tidy(mulheres.model)
+mulheresAugmented = dados_mulheres %>% 
+  add_predictions(mulheres.model) %>% 
+  add_residuals(mulheres.model)
+
+# Modelo x dados
+
+  ggplotly(ggplot(mulheresAugmented, aes(x = attr)) + 
+  geom_line(aes(y = pred), size = 2, colour = "blue") + 
+  geom_point(aes(y = like)))
+
+# Resíduos x dados
+mulheresAugmented %>% 
+  ggplot(aes(x = attr)) + 
+  geom_point(aes(y = resid), size = 2, position = "dodge") +
+  geom_ref_line(h = 0, colour = "grey80")
+
+tidy(mulheres.model, conf.int = TRUE)
+glance(mulheres.model, conf.int = TRUE)
+
+```
+

@@ -1,6 +1,5 @@
 ---
 title: "lab5-cp1"
-author: "Lucas Diniz"
 date: "22/08/2017"
 output: html_notebook
 ---
@@ -19,13 +18,15 @@ Vamos direto ao ponto, os dados que vamos analisar de cada encontro consistem ba
 
 ```{r setup, include=FALSE} 
   knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+  suppressWarnings(library(tidyverse))
   library(tidyverse)
   library(GGally)
   library(broom)
   library(ggfortify)
   library(ggplot2)
-library(pscl)
   library(modelr)
+  library(car)
+  library(plotly)
 
 ```
 
@@ -42,42 +43,148 @@ Observemos primeiro a relação entre as variáveis citadas do ponto de vista do
             lower = list(continuous = wrap("points", alpha = 0.3)))
 ```
 
-Podemos notar que para os homens que fizeram o experimento, na hora de decidir se gosta de alguém ou não o bom-humor é o fator <b>MAIS</b> importante. Contudo beleza, e compartilhamento de interesses ainda aparecem como quesitos importantes. Aparantemente inteligência não parece ser um fator importante para os homens :p (Não me surpreendi com esse resultado hahaha).
+Pela correlação das variáveis apresentadas com a variável like, podemos achar que para os homens que fizeram o experimento na hora de decidir se gosta de alguém ou não o bom-humor é o fator <b>MAIS</b> importante. Contudo beleza, e compartilhamento de interesses ainda parecem ser quesitos importantes. Aparantemente inteligência não parece ser um fator importante para os homens :p (Não me surpreendi com esse resultado hahaha).
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
   dados_mulheres %>% 
     select(like, attr, fun, intel, shar) %>%
     ggpairs(size = .5, 
             lower = list(continuous = wrap("points", size = .5, alpha = 0.3)))
 ```
 
-Já para as mulheres obtivemos um resultado parecido, contudo, o fator beleza é o mais importante. Seguido de perto por bom-humor e compartilhamento de interesses. As mulheres parecem também se importar mais com o quesito inteligência, porém não tanto quanto eu esperava rs.
+Já para as mulheres obtivemos um resultado parecido, contudo, o fator beleza parece ser o mais importante. Seguido de perto por bom-humor e compartilhamento de interesses. As mulheres parecem também se importar mais com o quesito inteligência, porém não tanto quanto eu esperava rs.
 
-```{r}
-dados_homens %>% mutate(like = like, attr = attr) %>% ggplot(aes(x = fun)) + geom_point(aes(y = like, size=shar, color = attr))
+Com isso, duas perguntas óbvias aparecem na nossa mente. A primeira delas é:
 
+<h2>Pergunta 1: Quais os fatores mais importantes para uma mulher gostar de outra pessoa?</h2>
 
-dados_mulheres <- dados_mulheres %>% filter(attr > 0, fun > 0)
-mulheres.model = lm(log(like) ~ log(attr), data = dados_mulheres)
-tidy(mulheres.model)
-mulheresAugmented = dados_mulheres %>% 
-  add_predictions(mulheres.model) %>% 
-  add_residuals(mulheres.model)
+Para responder essas perguntas, vamos tentar gerar uma regressão para explicar a variável like utilizando estes outros quatro fatores que estamos observando:
 
-# Modelo x dados
-mulheresAugmented %>% 
-  ggplot(aes(x = attr)) + 
-  geom_line(aes(y = exp(pred)), size = 2, colour = "blue") + 
-  geom_point(aes(y = like))
+```{r, message=FALSE, warning=FALSE}
 
-# Resíduos x dados
-mulheresAugmented %>% 
-  ggplot(aes(x = attr)) + 
-  geom_point(aes(y = resid), size = 2, position = "dodge") +
-  geom_ref_line(h = 0, colour = "grey80")
-
-tidy(mulheres.model, conf.int = TRUE)
-glance(mulheres.model, conf.int = TRUE)
+mulheres.model = lm(like ~ attr + fun + shar + intel, data = dados_mulheres)
+summary(mulheres.model)
 
 ```
 
+<h3>Validando o modelo</h3>
+
+Vamos verificar a validade do modelo encontrado confrontando-o com alguns problemas comuns.
+
+<h3>Colinearidade entre variáveis explicativas</h3>
+
+Já vimos anteriormente que nossas variáveis explicativas possuem um certo nível de correlação, contudo, será que isso é um problema para o modelo? Vamos calcular quanto cada fator contribui para a variância do modelo
+
+```{r, message=FALSE, warning=FALSE}
+vif(mulheres.model)
+```
+Como a recomendação é que VIF < 5, não teremos problemas devido a colineriadade dos fatores explicativos.
+
+<h3>Outliers e High Leverage points</h3>
+Vamos utilizar um QQ Plot (quantil quantil plot) para observar os resíduos "studentizados" do nosso modelo e verificar se temos algum ponto suspeito.
+
+```{r, message=FALSE, warning=FALSE}
+qqPlot(mulheres.model, main="QQ Plot")
+
+```
+Temos alguns pontos com resíduos suspeitos, o ideal seria investigar quais são esses pontos e se eles realmente fazem sentido (help wanted). Contudo, <b>os resíduos parecem estar distribuídos de maneira quase normal</b> portanto com isso não teremos problemas.
+
+<h3>Interpretação do modelo e resposta para a pergunta 1</h3>
+O valor obtido para o R-quadrado do nosso modelo foi <b>0.6757</b> ou seja, nosso modelo explica <b>67.57%</b> da variância dos dados. Valor razoável, dada a grande dispersão presente nos dados.
+
+Todas as variáveis explicativas utilizadas foram significativas e, para as mulheres, as mais significativas foram (nessa ordem):
+
+1 - Beleza<br>
+2 - Compartilhamento de interesses<br>
+3 - Inteligência<br>
+4 - Quão engraçada é a outra pessoa<br>
+
+Por fim, vamos visualizar o modelo obtido. Como temos 4 variáveis explicativas seria necessário um espaço 5-dimensional para visualiza-lo. Devido a isso vamos visualizar da seguinte maneira:
+
+Eixo x - variável attr.<br>
+Eixo y - predição feita pelo modelo para a variável like.<br>
+Cor dos pontos - variável fun.<br>
+Tamanho dos pontos - variável shar.<br>
+Facetas do gráfico - variável intel.<br>
+
+```{r, message=FALSE, warning=FALSE}
+
+para_plotar_modelo = dados_mulheres %>% 
+  data_grid(attr = seq_range(attr, 10), 
+            fun = seq_range(fun, 4), 
+            intel = seq_range(intel, 3),
+            shar = seq_range(shar, 3)) %>% add_predictions(mulheres.model)
+
+ggplotly(ggplot(para_plotar_modelo, aes(x = attr, y = pred)) + 
+  geom_point(aes(colour = fun, size = shar)) + facet_grid(. ~intel))
+
+```
+
+<h2>Pergunta 2: Quais os fatores mais importantes para um homem gostar de outra pessoa?</h2>
+
+Da mesma maneira que fizemos para as mulheres vamos tentar gerar uma regressão para explicar a variável like.
+
+```{r, message=FALSE, warning=FALSE}
+
+homens.model = lm(like ~ attr + fun + shar + intel, data = dados_homens)
+summary(homens.model)
+
+```
+
+<h3>Validando o modelo</h3>
+
+<h3>Colinearidade entre variáveis explicativas</h3>
+
+Assim como para as mulheres, as nossas variáveis explicativas possuem um certo nível de correlação, contudo, será que isso implica em colinearidade? Vamos calcular quanto cada fator contribui para a variância do modelo
+
+```{r, message=FALSE, warning=FALSE}
+vif(homens.model)
+```
+Como a recomendação é que VIF < 5, novamente não teremos problemas devido a colineriadade das nossas variáveis independentes.
+
+<h3>Outliers e High Leverage points</h3>
+Vamos utilizar um QQ Plot (quantil quantil plot) para observar os resíduos "studentizados" do nosso modelo e verificar se temos algum ponto suspeito.
+
+```{r, message=FALSE, warning=FALSE}
+qqPlot(homens.model, main="QQ Plot")
+
+```
+Temos alguns pontos com resíduos suspeitos na parte de baixo do gráfico e um ponto MUITO suspeito com <b>6</b> de resíduo studentizado. Este ponto provalvemente não representa o padrão geral dos dados e deve ser removido para não afetar muito o nosso modelo (help wanted!). Contudo, <b>os resíduos parecem estar distribuídos de maneira quase normal</b> portanto com isso não teremos problemas.
+
+<h3>Interpretação do modelo e resposta para a pergunta 2</h3>
+O valor obtido para o R-quadrado do nosso modelo foi <b>0.6317</b> ou seja, nosso modelo explica <b>63.17%</b> da variância dos dados. Valor razoável, dada a grande dispersão presente nos dados.
+
+Todas as variáveis explicativas utilizadas foram significativas e, para os homens, as mais significativas foram (nessa ordem):
+
+1 - Beleza<br>
+2 - Compartilhamento de interesses<br>
+3 - Quão engraçada é a outra pessoa<br>
+4 - Inteligência<br>
+
+Por fim, vamos visualizar o modelo obtido. Como temos 4 variáveis explicativas seria necessário um espaço 5-dimensional para visualiza-lo. Devido a isso vamos visualizar da seguinte maneira:
+
+Eixo x: variável attr.<br>
+Eixo y: predição feita pelo modelo para a variável like.<br>
+Cor dos pontos: variável fun.<br>
+Tamanho dos pontos: variável shar.<br>
+Facetas do gráfico: variável intel.<br>
+
+```{r, message=FALSE, warning=FALSE}
+
+para_plotar_modelo = dados_homens %>% 
+  data_grid(attr = seq_range(attr, 10), 
+            fun = seq_range(fun, 4), 
+            intel = seq_range(intel, 3),
+            shar = seq_range(shar, 3)) %>% add_predictions(homens.model)
+
+ggplotly(ggplot(para_plotar_modelo, aes(x = attr, y = pred)) + 
+  geom_point(aes(colour = fun, size = shar)) + facet_grid(. ~intel))
+
+```
+
+<h3>Conclusao</h3>
+Me parece que a hipótese que fizemos no começo desse relatório está correta! Apesar de para ambos os sexos o fator beleza ter sido o mais significativo na regressão... Contudo, vimos que beleza não é o único fator que as pessoas levam em conta na hora de gostar alguém. 
+
+Para as mulheres interesses em comum e inteligência também parecem ser fatores importantes. Já para os homens é importante também que a outra pessoa seja engraçada e que compartilhe interesses em comum.
+
+Porém vale lembrar que estamos tratando de seres humanos! E nunca vamos conseguir definir uma fórmula fechada para algo tão complexo como um relacionamento entre duas pessoas... A minha é dica é: <b>Seja você mesmo! Autenticidade não está nos dados, mas com certeza seria significativo se estivesse.</b>
